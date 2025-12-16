@@ -1,153 +1,149 @@
 
 
-Imports System.Data
-Imports System.Data.SqlClient
-Imports System.Web.UI.DataVisualization.Charting
+<asp:Content ID="Content1" ContentPlaceHolderID="head" runat="server">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <!-- Treemap plugin - must come AFTER chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.3.0/dist/chartjs-chart-treemap.umd.js"></script>
 
-Partial Public Class Data_Quality_Dashboard
-    Inherits System.Web.UI.Page
-    Protected schemaJson As String = "[]"
+    <style>
+        .dq-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .dq-table td {
+            border: 1px solid #e1e1e8;
+            padding: 8px 12px;
+        }
+        .dq-table tr:first-child td {
+            background: #f0f0f5;
+            font-weight: 600;
+        }
+    </style>
 
-    Protected Sub Page_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
-        cs.DoLogin()
-        If Not IsPostBack Then
-            myDQ.SetActiveView(myboard)
+    <style>
+        .kpi-row {
+            display: flex;
+            gap: 16px;
+            margin: 12px auto 20px auto;
+            max-width: 1100px;
+        }
+        .kpi-card {
+            flex: 1;
+            background: #f7f7fa;
+            border: 1px solid #e1e1e8;
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 1px 20px rgba(0, 0, 0, 0.05);
+        }
+        .kpi-title {
+            color: #555;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+        .kpi-value {
+            border-top: 4px solid #4B2E83;
+            border-radius: 8px 8px 0 0;
+        }
+    </style>
+</asp:Content>
 
-            ' Retrieve KPI Values
-            Dim totalRecords As Long = GetTotalRecords()
-            Dim totalTables As Integer = GetTotalTables()
-            Dim totalSchemas As Integer = GetTotalSchemas()
+<asp:Content ID="Content2" ContentPlaceHolderID="MainContent" runat="server">
 
-            ' Bind KPI Labels (IDs must match ASPX)
-            lblTotalRecords.Text = totalRecords.ToString("N0")
-            lblTotalTables.Text = totalTables.ToString("N0")
-            lblTotalSchemas.Text = totalSchemas.ToString("N0")
+    <asp:MultiView ID="myDQ" runat="server">
+        <asp:View ID="myboard" runat="server">
+            <asp:Table ID="Table1" runat="server" CssClass="dq-table" />
+            <div class="kpi-row">
+                <div class="kpi-card kpi-accent">
+                    <div class="kpi-title">Total Tables</div>
+                    <div class="kpi-value">
+                        <asp:Label ID="lblTotalTables" runat="server" Text="0"></asp:Label>
+                    </div>
+                </div>
 
-            schemaJson = GetSchemaJson()
+                <div class="kpi-card kpi-accent">
+                    <div class="kpi-title">Total Records</div>
+                    <div class="kpi-value">
+                        <asp:Label ID="lblTotalRecords" runat="server" Text="0"></asp:Label>
+                    </div>
+                </div>
 
-            ' Build metrics table and chart
-            BuildMetricsTable(totalRecords, totalTables, totalSchemas)
+                <div class="kpi-card kpi-accent">
+                    <div class="kpi-title">Total Schemas</div>
+                    <div class="kpi-value">
+                        <asp:Label ID="lblTotalSchemas" runat="server" Text="0"></asp:Label>
+                    </div>
+                </div>
+            </div>
 
-        End If
-    End Sub
+            <canvas id="treemapChart" style="width:100%; height:500px;"></canvas>
 
-    Private Sub BuildMetricsTable(totalRecords As Long, totalTables As Integer, totalSchemas As Integer)
-        Table1.Rows.Clear()
+            <script>
+                // VB.NET injected JSON
+                var chartData = <%= schemaJson %>;
 
-        ' Header
-        Dim hdr As New TableRow()
-        hdr.Cells.Add(New TableCell() With {.Text = "<b>Metric</b>"})
-        hdr.Cells.Add(New TableCell() With {.Text = "<b>Value</b>"})
-        Table1.Rows.Add(hdr)
+                const treemapValues = chartData.map(s => ({
+                    label: `[${s.Schema}]`,
+                    value: Number(s.RowCount) || 0
+                }));
 
-        ' Live Counts
-        Dim failedNCount As Integer = GetFailedNCount()
-        Dim passedYCount As Integer = GetPassedYCount()
+                const canvasEL = document.getElementById('treemapChart');
+                if (canvasEL && typeof Chart !== 'undefined') {
+                    // Verify treemap is registered
+                    console.log('Available chart types:', Object.keys(Chart.registry.controllers.items));
+                    
+                    new Chart(canvasEL, {
+                        type: 'treemap',
+                        data: {
+                            datasets: [{
+                                tree: treemapValues,
+                                key: 'value',
+                                groups: ['label'],
+                                spacing: 0.5,
+                                borderWidth: 1,
+                                borderColor: '#fff',
+                                backgroundColor: function(ctx) {
+                                    if (!ctx.dataset.data || !ctx.dataset.data[ctx.dataIndex]) return 'rgba(75, 192, 192, 0.5)';
+                                    const value = ctx.dataset.data[ctx.dataIndex].v || 0;
+                                    const alpha = Math.min(0.7, 0.3 + (value / 1000000));
+                                    return `rgba(75, 192, 192, ${alpha})`;
+                                },
+                                labels: {
+                                    display: true,
+                                    formatter: function(ctx) {
+                                        return `${ctx.raw.g || ctx.raw.label} (${(ctx.raw.v || ctx.raw.value).toLocaleString()})`;
+                                    }
+                                }
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        title: function(items) {
+                                            return items[0].raw.g || items[0].raw.label;
+                                        },
+                                        label: function(item) {
+                                            return 'Row Count: ' + (item.raw.v || item.raw.value).toLocaleString();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    console.error('Canvas element not found or Chart.js not loaded.');
+                }
+            </script>
 
-        ' Example Static rows (keep or replace with your real computations)
-        Dim r1 As New TableRow()
-        r1.Cells.Add(New TableCell() With {.Text = "Passed"})
-        r1.Cells.Add(New TableCell() With {.Text = "97.3%"})
-        Table1.Rows.Add(r1)
+        </asp:View>
+    </asp:MultiView>
 
-        Dim r2 As New TableRow()
-        r2.Cells.Add(New TableCell() With {.Text = "Failed"})
-        r2.Cells.Add(New TableCell() With {.Text = "2.7%"})
-        Table1.Rows.Add(r2)
-
-        Dim r3 As New TableRow()
-        r3.Cells.Add(New TableCell() With {.Text = "Passed = ((Count))"})
-        r3.Cells.Add(New TableCell() With {.Text = passedYCount.ToString("N0")})
-        Table1.Rows.Add(r3)
-
-        Dim r4 As New TableRow()
-        r4.Cells.Add(New TableCell() With {.Text = "Failed = ((Count))"})
-        r4.Cells.Add(New TableCell() With {.Text = failedNCount.ToString("N0")})
-        Table1.Rows.Add(r4)
-
-        ' KPI Rows
-        Dim k1 As New TableRow()
-        k1.Cells.Add(New TableCell() With {.Text = "<b>Total Tables</b>"})
-        k1.Cells.Add(New TableCell() With {.Text = totalTables.ToString("N0")})
-        Table1.Rows.Add(k1)
-
-        Dim k2 As New TableRow()
-        k2.Cells.Add(New TableCell() With {.Text = "<b>Total Records</b>"})
-        k2.Cells.Add(New TableCell() With {.Text = totalRecords.ToString("N0")})
-        Table1.Rows.Add(k2)
-
-        Dim k3 As New TableRow()
-        k3.Cells.Add(New TableCell() With {.Text = "<b>Total Schemas</b>"})
-        k3.Cells.Add(New TableCell() With {.Text = totalSchemas.ToString("N0")})
-        Table1.Rows.Add(k3)
-
-    End Sub
-
-    Private Function GetTotalRecords() As Long
-        Using conn As SqlConnection = db.GetSQLConn(0)
-            conn.Open()
-            Using cmd As New SqlCommand("LOG.sp_Get_TotalRecords_DQ", conn)
-                cmd.CommandType = CommandType.StoredProcedure
-                Return Convert.ToInt64(cmd.ExecuteScalar())
-            End Using
-            conn.Close()
-        End Using
-    End Function
-
-    Private Function GetTotalTables() As Integer
-        Using conn As SqlConnection = db.GetSQLConn(0)
-            conn.Open()
-            Using cmd As New SqlCommand("LOG.sp_Get_TotalTables_DQ", conn)
-                cmd.CommandType = CommandType.StoredProcedure
-                Return Convert.ToInt32(cmd.ExecuteScalar())
-            End Using
-            conn.Close()
-        End Using
-    End Function
-
-    Private Function GetTotalSchemas() As Integer
-        Using conn As SqlConnection = db.GetSQLConn(0)
-            conn.Open()
-            Using cmd As New SqlCommand("LOG.sp_Get_TotalSchemas_DQ", conn)
-                cmd.CommandType = CommandType.StoredProcedure
-                Return Convert.ToInt32(cmd.ExecuteScalar())
-            End Using
-            conn.Close()
-        End Using
-    End Function
-
-    Private Function GetSchemaJson() As String
-        Dim list As New List(Of Dictionary(Of String, Object))()
-
-        Using conn As SqlConnection = db.GetSQLConn(0)
-            Using cmd As New SqlCommand("LOG.sp_Get_SchemaRowCounts_DQ", conn)
-                cmd.CommandType = CommandType.StoredProcedure
-                conn.Open()
-
-                Using rdr As SqlDataReader = cmd.ExecuteReader()
-                    While rdr.Read()
-                        Dim row As New Dictionary(Of String, Object)()
-                        row("Schema") = rdr("SchemaName").ToString()
-                        row("RowCount") = Convert.ToInt32(rdr("RowCount"))
-                        list.Add(row)
-                    End While
-                End Using
-            End Using
-        End Using
-
-        Return New System.Web.Script.Serialization.JavaScriptSerializer().Serialize(list)
-    End Function
-
-    Private Function GetFailedNCount() As Integer
-        ' TODO: Implement this function to retrieve failed count
-        ' Placeholder return value
-        Return 0
-    End Function
-
-    Private Function GetPassedYCount() As Integer
-        ' TODO: Implement this function to retrieve passed count
-        ' Placeholder return value
-        Return 0
-    End Function
-
-End Class
+</asp:Content>
