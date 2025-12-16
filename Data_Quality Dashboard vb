@@ -86,7 +86,9 @@ Partial Public Class Data_Quality_Dashboard
             Using cmd As New SqlCommand("LOG.sp_Get_TotalRecords_DQ", conn)
                 cmd.CommandType = CommandType.StoredProcedure
                 conn.Open()
-                Return Convert.ToInt64(cmd.ExecuteScalar())
+                Dim result As Long = Convert.ToInt64(cmd.ExecuteScalar())
+                conn.Close()
+                Return result
             End Using
         End Using
     End Function
@@ -96,7 +98,9 @@ Partial Public Class Data_Quality_Dashboard
             Using cmd As New SqlCommand("LOG.sp_Get_TotalTables_DQ", conn)
                 cmd.CommandType = CommandType.StoredProcedure
                 conn.Open()
-                Return Convert.ToInt32(cmd.ExecuteScalar())
+                Dim result As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+                conn.Close()
+                Return result
             End Using
         End Using
     End Function
@@ -106,7 +110,9 @@ Partial Public Class Data_Quality_Dashboard
             Using cmd As New SqlCommand("LOG.sp_Get_TotalSchemas_DQ", conn)
                 cmd.CommandType = CommandType.StoredProcedure
                 conn.Open()
-                Return Convert.ToInt32(cmd.ExecuteScalar())
+                Dim result As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+                conn.Close()
+                Return result
             End Using
         End Using
     End Function
@@ -127,6 +133,8 @@ Partial Public Class Data_Quality_Dashboard
                         list.Add(row)
                     End While
                 End Using
+                
+                conn.Close()
             End Using
         End Using
 
@@ -134,19 +142,30 @@ Partial Public Class Data_Quality_Dashboard
     End Function
 
     Private Function GetFailedNCount() As Integer
-        ' TODO: Implement this function to retrieve failed count
-        ' Placeholder return value
-        Return 0
+        Using conn As SqlConnection = db.GetSQLConn(0)
+            Using cmd As New SqlCommand("LOG.sp_Get_FailedNCount_DQ", conn)
+                cmd.CommandType = CommandType.StoredProcedure
+                conn.Open()
+                Dim result As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+                conn.Close()
+                Return result
+            End Using
+        End Using
     End Function
 
     Private Function GetPassedYCount() As Integer
-        ' TODO: Implement this function to retrieve passed count
-        ' Placeholder return value
-        Return 0
+        Using conn As SqlConnection = db.GetSQLConn(0)
+            Using cmd As New SqlCommand("LOG.sp_Get_PassedYCount_DQ", conn)
+                cmd.CommandType = CommandType.StoredProcedure
+                conn.Open()
+                Dim result As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+                conn.Close()
+                Return result
+            End Using
+        End Using
     End Function
 
 End Class
-
 
                
 
