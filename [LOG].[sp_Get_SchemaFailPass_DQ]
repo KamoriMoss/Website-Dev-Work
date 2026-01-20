@@ -1,31 +1,54 @@
+USE [EDG_DMMR]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 CREATE OR ALTER PROCEDURE [LOG].[sp_Get_SchemaFailPass_DQ]
 AS
 BEGIN
     SET NOCOUNT ON;
-
-    SELECT 
-        -- Extract schema from DQ_Table (everything before the first period)
-        LEFT(DQ_Table, CHARINDEX('.', DQ_Table) - 1) AS [Schema],
+    
+    ;WITH LatestRun AS
+    (
+        SELECT MAX(DQ_AS_OF_DATE) AS MaxAsOfDate
+        FROM [Log].[Data_Quality]
+    )
+    SELECT
+        -- Extract Schema from Schema.Table (everything before the period)
+        LEFT(DQ_Table, CHARINDEX('.', DQ_Table) - 1) AS SchemaName,
         
-        -- Count of failed rules
-        COUNT(CASE WHEN DQ_Failed = 'Y' THEN 1 END) AS Failed_Count,
+        -- Extract Table from Schema.Table (everything after the period)
+        SUBSTRING(DQ_Table, CHARINDEX('.', DQ_Table) + 1, LEN(DQ_Table)) AS TableName,
         
-        -- Count of passed rules
-        COUNT(CASE WHEN DQ_Failed = 'N' THEN 1 END) AS Passed_Count,
+        -- Passed checks (DQ_Failed = 'N')
+        SUM(CASE
+                WHEN DQ_Failed = 'N'
+                THEN 1
+                ELSE 0
+            END) AS PassedCount,
         
-        -- Total count of rules
-        COUNT(*) AS Total_Count,
+        -- Failed checks (DQ_Failed = 'Y')
+        SUM(CASE
+                WHEN DQ_Failed = 'Y'
+                THEN 1 
+                ELSE 0
+            END) AS FailedCount,
         
-        -- Failed checks only (concatenated with delimiter)
+        -- Failed check details (only if failed)
         STRING_AGG(
             CASE WHEN DQ_Failed = 'Y' THEN DQ_Check END, 
             '; '
-        ) AS Failed_Checks
-
-    FROM [Log].[Data_Quality]
-    
-    GROUP BY LEFT(DQ_Table, CHARINDEX('.', DQ_Table) - 1)
-    
-    ORDER BY [Schema];
-
+        ) WITHIN GROUP (ORDER BY DQ_Check) AS Failed_Checks
+        
+    FROM [LOG].[Data_Quality] dq
+    CROSS JOIN LatestRun lr
+    WHERE dq.DQ_AS_OF_DATE = lr.MaxAsOfDate
+        AND CHARINDEX('.', dq.DQ_Table) > 0
+    GROUP BY
+        LEFT(DQ_Table, CHARINDEX('.', DQ_Table) - 1),
+        SUBSTRING(DQ_Table, CHARINDEX('.', DQ_Table) + 1, LEN(DQ_Table))
+    ORDER BY
+        FailedCount DESC;
 END;
+GO
