@@ -1,0 +1,31 @@
+CREATE OR ALTER PROCEDURE [LOG].[sp_Get_SchemaFailPass_DQ]
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        -- Extract schema from DQ_Table (everything before the first period)
+        LEFT(DQ_Table, CHARINDEX('.', DQ_Table) - 1) AS [Schema],
+        
+        -- Count of failed rules
+        COUNT(CASE WHEN DQ_Failed = 'Y' THEN 1 END) AS Failed_Count,
+        
+        -- Count of passed rules
+        COUNT(CASE WHEN DQ_Failed = 'N' THEN 1 END) AS Passed_Count,
+        
+        -- Total count of rules
+        COUNT(*) AS Total_Count,
+        
+        -- Failed checks only (concatenated with delimiter)
+        STRING_AGG(
+            CASE WHEN DQ_Failed = 'Y' THEN DQ_Check END, 
+            '; '
+        ) AS Failed_Checks
+
+    FROM [Log].[Data_Quality]
+    
+    GROUP BY LEFT(DQ_Table, CHARINDEX('.', DQ_Table) - 1)
+    
+    ORDER BY [Schema];
+
+END;
